@@ -1,17 +1,19 @@
-from fastapi import FastAPI,status,HTTPException , Depends
+from fastapi import FastAPI,status,HTTPException , Depends 
 #from fastapi.params import Body
 from pydantic import BaseModel
 from typing import Optional
-from random import randrange
+#from random import randrange
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv
 import os
-from sqlalchemy.orm import Session
+#from passlib.context import CryptContext
+#from sqlalchemy.orm import Session
 from database import get_db, engine
-import models
+import tables
+from routers import posts, user , auth
 
-models.Base.metadata.create_all(bind=engine)
+tables.Base.metadata.create_all(bind=engine)
 
 app= FastAPI()
 load_dotenv()
@@ -38,50 +40,7 @@ try:
 except Exception as error:
     print(f"Connecting to database failed due to {error}")
 
-
-
-@app.get("/sqlalchemy")
-def test_posts(db: Session = Depends(get_db)):
-    p= db.query(models.Post).all() #p var is a query and .all() executes query.Use the class name to query the table instead of table name. 
-    #Class name is Post and table name is posts_alchaemy.Post is used to query the table as it is mapped to the table using __tablename__
-    return {"message": p}
-
-@app.post("/sqlalchemy/create",status_code=status.HTTP_201_CREATED)
-def create_post_sqlalchemy(payload: About, db: Session = Depends(get_db)):
-    new_post = models.Post(**payload.dict()) #**payload.dict() unpacks dictionary and passes key-value as arguments to the Post class constructor.
-    db.add(new_post)
-    db.commit()
-    db.refresh(new_post)
-    return {"message": new_post}
-
-@app.get("/sqlalchemy/{id}")
-def get_post(id: int, db: Session = Depends(get_db)):
-    post = db.query(models.Post).filter(models.Post.id == id).first()
-    if not post:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"post with id {id} not found in the list or database.")
-    return {"message": post}
-
-
-@app.delete("/sqlalchemy/{id}")
-def del_post(id : int, db: Session = Depends(get_db)):
-    post = db.query(models.Post).filter(models.Post.id == id).first()
-    if not post:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"post with id {id} not found in the list or database.")
-    db.delete(post)
-    db.commit()
-    return {"message": f"post with id {id} has been deleted successfully.", "deleted_post": post}
-
-@app.put("/sqlalchemy/{id}")
-def update_post(id: int, payload: About, db: Session = Depends(get_db)):
-    post_query = db.query(models.Post).filter(models.Post.id == id)
-    post=post_query.first()
-    if not post:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"post with id {id} not found in the list or database.")
-    post_query.update(payload.dict(), synchronize_session=False) #synchronize_session=False used to avoid the overhead of synchronizing session with the database after the update.
-    db.commit()
-    db.refresh(post)
-    return {"message": f"post with id {id} has been updated successfully.", "updated_post": post}
-
+app.include_router(posts.router)
 #Everything above this line is for sqlalchemy and everything below this line is for psycopg2.
 @app.get("/posts")
 def root():
@@ -157,3 +116,8 @@ def update_post(id: int, payload: About):
     if not updated_post:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"post with id {id} not found in the list or database.")
     return {"message": f"post with id {id} has been updated successfully.", "updated_post": updated_post}
+
+#From here users
+app.include_router(user.router)
+#auth
+app.include_router(auth.router)
